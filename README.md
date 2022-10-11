@@ -1,1 +1,1 @@
-# @web3-react/metamask
+# we3 react torus connector
