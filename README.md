@@ -1,1 +1,1 @@
-# we3 react torus connector
+# web3 react torus connector
