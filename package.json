@@ -1,0 +1,35 @@
+{
+	"name": "web3-react-torusconnector",
+	"keywords": [
+		"web3-react",
+		"torusConnector"
+	],
+	"author": "char",
+	"license": "GPL-3.0-or-later",
+	"repository": "",
+	"publishConfig": {
+		"access": "public"
+	},
+	"version": "1.0.0",
+	"files": [
+		"dist/*"
+	],
+	"type": "commonjs",
+	"types": "./dist/index.d.ts",
+	"main": "./dist/index.js",
+	"exports": "./dist/index.js",
+	"scripts": {
+		"prebuild": "rm -rf dist",
+		"build": "tsc",
+		"start": "tsc --watch"
+	},
+	"dependencies": {
+		"@metamask/detect-provider": "^1.2.0",
+		"@toruslabs/torus-embed": "^1.36.1",
+		"@web3-react/types": "^8.0.20-beta.0",
+		"ethers": "^5.7.1"
+	},
+	"devDependencies": {
+		"@web3-react/store": "^8.0.25-beta.0"
+	}
+}
