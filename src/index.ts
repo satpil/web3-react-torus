@@ -1,15 +1,12 @@
-import type detectEthereumProvider from '@metamask/detect-provider'
 import type {
   Actions,
   AddEthereumChainParameter,
   Provider,
   ProviderConnectInfo,
   ProviderRpcError,
-  WatchAssetParameters,
 } from '@web3-react/types'
 import { Connector } from '@web3-react/types'
 import Torus from '@toruslabs/torus-embed'
-import { ethers } from 'ethers'
 
 type torusProvider = Provider
 
@@ -23,7 +20,6 @@ function parseChainId(chainId: string) {
  */
 export interface torusConstructorArgs {
   actions: Actions
-  options?: Parameters<typeof detectEthereumProvider>[0]
   onError?: (error: Error) => void
 }
 
@@ -32,7 +28,7 @@ export class TorusConnector extends Connector {
   public provider?: torusProvider
   private eagerConnection?: Promise<void>
 
-  constructor({ actions, options, onError }: torusConstructorArgs) {
+  constructor({ actions, onError }: torusConstructorArgs) {
     super(actions, onError)
   }
 
@@ -40,63 +36,28 @@ export class TorusConnector extends Connector {
     if (this.eagerConnection) return
 
     return (this.eagerConnection = import('@toruslabs/torus-embed').then(async (m) => {
-      const provider = await m.default
+      const provider = await m
       if (provider) {
         const torusMain = new Torus()
         await torusMain.init()
         await torusMain.ethereum.enable()
         this.provider = torusMain.provider
 
-        // handle the case when e.g. metamask and coinbase wallet are both installed
-        // if (this.provider.providers?.length) {
-        //   this.provider = this.provider.providers.find((p: any) => p.isMetaMask) ?? this.provider.providers[0]
-        // }
-
-        // const provider = new ethers.providers.Web3Provider(torusMain.provider, 'any')
-
-        // await provider.send('eth_requestAccounts', [])
-        // const signer = provider.getSigner()
-
-        // signer?.getChainId().then((chainId) => {
-        //   setInterval(async () => {
-        //     signer?.getChainId().then((newchainId) => {
-        //       if (chainId !== newchainId) {
-        //         console.log('AAAAAA', chainId)
-        //         if (!chainId) return
-        //         signer?.getChainId().then((chainId) => {
-        //           this.actions.update({ chainId: parseChainId(chainId.toString()) })
-        //         })
-        //       }
-        //     })
-        //   }, 1000)
-        // })
-
-        // signer?.getChainId().then((chainId) => {
-        //   this.actions.update({ chainId: parseChainId(chainId.toString()) })
-        // })
-        // provider?.listAccounts().then((address) => {
-        //   this.actions.update({ accounts: address })
-        // })
-
-        // console.log('Account:', provider._events)
-        // this?.actions?.update({ chainId: parseChainId(chainId) })
-
-        this.provider?.on('connect', ({ chainId }: ProviderConnectInfo): void => {
+        this.provider.on('connect', ({ chainId }: ProviderConnectInfo): void => {
           this.actions.update({ chainId: parseChainId(chainId) })
         })
 
-        this.provider?.on('disconnect', (error: ProviderRpcError): void => {
+        this.provider.on('disconnect', (error: ProviderRpcError): void => {
           this.actions.resetState()
           this.onError?.(error)
         })
 
-        this.provider?.on('chainChanged', (chainId: string): void => {
+        this.provider.on('chainChanged', (chainId: string): void => {
           this.actions.update({ chainId: parseChainId(chainId) })
         })
 
-        this.provider?.on('accountsChanged', (accounts: string[]): void => {
+        this.provider.on('accountsChanged', (accounts: string[]): void => {
           if (accounts.length === 0) {
-            // handle this edge case by disconnecting
             this.actions.resetState()
           } else {
             this.actions.update({ accounts })
@@ -158,8 +119,6 @@ export class TorusConnector extends Connector {
           this.provider = torusMain.provider
         }
 
-        // TorusProvider = (await import('@toruslabs/torus-embed')).default
-        //  throw new NoMetaMaskError()
         return Promise.all([
           this.provider.request({ method: 'eth_chainId' }) as Promise<string>,
           this.provider.request({ method: 'eth_requestAccounts' }) as Promise<string[]>,
@@ -207,14 +166,5 @@ export class TorusConnector extends Connector {
         cancelActivation?.()
         throw error
       })
-  }
-
-  public async deactivate(): Promise<void> {
-    // const cancelDesactivate = this.actions.reportError(undefined)
-    // if (!this.torus) return cancelDesactivate
-    this.actions.resetState()
-    this.provider = undefined
-
-    // return Promise.resolve(torusMain.logout())
   }
 }
