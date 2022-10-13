@@ -37,7 +37,7 @@ export class TorusConnector extends Connector {
 
 		return (this.eagerConnection = import("@toruslabs/torus-embed").then(
 			async (m) => {
-				const provider = await m?.LOGIN_PROVIDER;
+				const provider = (await m) && m?.default;
 				if (provider) {
 					const torusMain = new Torus();
 					await torusMain.init();
@@ -120,8 +120,9 @@ export class TorusConnector extends Connector {
 		return this.isomorphicInitialize()
 			.then(async () => {
 				if (!this.provider) {
-					// const TorusProvider = (await import('@toruslabs/torus-embed')).LOGIN_PROVIDER
-					const torusMain = new Torus();
+					const TorusProvider = (await import("@toruslabs/torus-embed"))
+						.default;
+					const torusMain = new TorusProvider();
 					await torusMain.init();
 					await torusMain.ethereum.enable();
 					this.provider = torusMain.provider;
