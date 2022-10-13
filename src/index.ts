@@ -1,184 +1,133 @@
-import type {
-	Actions,
-	AddEthereumChainParameter,
-	Provider,
-	ProviderConnectInfo,
-	ProviderRpcError,
-} from "@web3-react/types";
-import { Connector } from "@web3-react/types";
-import Torus from "@toruslabs/torus-embed";
+import type { ExternalProvider } from '@ethersproject/providers'
+import type { Actions, ProviderRpcError } from '@web3-react/types'
+import { Connector } from '@web3-react/types'
 
-type torusProvider = Provider;
-
-function parseChainId(chainId: string) {
-	return Number.parseInt(chainId, 16);
+// export interface MagicConnectorArguments extends MagicSDKAdditionalConfiguration {
+//   apiKey: string
+// }
+interface TorusConnectorArguments {
+  initOptions?: any
+  constructorOptions?: any
+  loginOptions?: any
+  chainId: number,
+  connectEagerly?: boolean
 }
+export class Torus extends Connector {
+  public provider: any
+  private readonly initOptions: any
+  private readonly constructorOptions: any
+  private readonly loginOptions: any
+  private readonly chainId: number
+  private eagerConnection?: Promise<void>
 
-/**
- * @param options - Options to pass to `@metamask/detect-provider`
- * @param onError - Handler to report errors thrown from eventListeners.
- */
-export interface torusConstructorArgs {
-	actions: Actions;
-	onError?: (error: Error) => void;
-}
+  public torus?: any
 
-export class TorusConnector extends Connector {
-	/** {@inheritdoc Connector.provider} */
-	public provider?: torusProvider;
-	private eagerConnection?: Promise<void>;
+  constructor(actions: Actions,connectEagerly = false, {chainId, initOptions = {}, constructorOptions = {}, loginOptions = {}}:TorusConnectorArguments) {
+    super(actions)
+    this.chainId = chainId
+    this.initOptions = initOptions
+    this.constructorOptions = constructorOptions
+    this.loginOptions = loginOptions    
 
-	constructor({ actions, onError }: torusConstructorArgs) {
-		super(actions, onError);
-	}
+    if (connectEagerly && this.serverSide) {
+      throw new Error('connectEagerly = true is invalid for SSR, instead use the connectEagerly method in a useEffect')
+    }
 
-	private async isomorphicInitialize(): Promise<void> {
-		if (this.eagerConnection) return;
+    if (connectEagerly) void this.connectEagerly()
 
-		return (this.eagerConnection = import("@toruslabs/torus-embed").then(
-			async (m) => {
-				const provider = (await m) && m?.default;
-				if (provider) {
-					const torusMain = new Torus();
-					await torusMain.init();
-					await torusMain.ethereum.enable();
-					this.provider = torusMain.provider;
+  }
 
-					this.provider.on(
-						"connect",
-						({ chainId }: ProviderConnectInfo): void => {
-							this.actions.update({ chainId: parseChainId(chainId) });
-						}
-					);
+  private async startListening(configuration: any): Promise<void> {
+     
+    if(!this.torus){
+      return import('@toruslabs/torus-embed').then(async (m) => {
+        this.torus = new m.default(this.constructorOptions)
+        
+        await this.torus.init(this.initOptions)
 
-					this.provider.on("disconnect", (error: ProviderRpcError): void => {
-						this.actions.resetState();
-						this.onError?.(error);
-					});
+        const [Web3Provider, Eip1193Bridge] = await Promise.all([
+          import('@ethersproject/providers').then(({ Web3Provider }) => Web3Provider),
+          import('@ethersproject/experimental').then(({ Eip1193Bridge }) => Eip1193Bridge),
+        ])
+  
+        await this.torus.login(this.loginOptions)
+        const provider = new Web3Provider(this.torus.provider as unknown as ExternalProvider)
+  
+        this.provider = new Eip1193Bridge(provider.getSigner(), provider)
+      })
+    }
+  }
 
-					this.provider.on("chainChanged", (chainId: string): void => {
-						this.actions.update({ chainId: parseChainId(chainId) });
-					});
+  public async activate(configuration: any): Promise<void> {
+    this.actions.startActivation()
 
-					this.provider.on("accountsChanged", (accounts: string[]): void => {
-						if (accounts.length === 0) {
-							this.actions.resetState();
-						} else {
-							this.actions.update({ accounts });
-						}
-					});
-				}
-			}
-		));
-	}
+    await this.startListening(configuration).catch((error: Error) => {
+      this.actions.reportError(error)
+    })
 
-	/** {@inheritdoc Connector.connectEagerly} */
-	public async connectEagerly(): Promise<void> {
-		const cancelActivation = this.actions.startActivation();
+    if (this.provider) {
+      await Promise.all([
+        this.provider.request({ method: 'eth_chainId' }) as Promise<string>,
+        this.provider.request({ method: 'eth_accounts' }) as Promise<string[]>,
+      ])
+        .then(([chainId, accounts]) => {
+          this.actions.update({ chainId: Number.parseInt(chainId, 16), accounts })
+        })
+        .catch((error: Error) => {
+          this.actions.reportError(error)
+        })
+    }
+  }
 
-		await this.isomorphicInitialize();
-		if (!this.provider) return cancelActivation();
 
-		return Promise.all([
-			this.provider.request({ method: "eth_chainId" }) as Promise<string>,
-			this.provider.request({ method: "eth_accounts" }) as Promise<string[]>,
-		])
-			.then(([chainId, accounts]) => {
-				console.log(chainId);
-				if (accounts.length) {
-					this.actions.update({ chainId: parseChainId(chainId), accounts });
-				} else {
-					throw new Error("No accounts returned");
-				}
-			})
-			.catch((error) => {
-				console.debug("Could not connect eagerly", error);
-				// we should be able to use `cancelActivation` here, but on mobile, metamask emits a 'connect'
-				// event, meaning that chainId is updated, and cancelActivation doesn't work because an intermediary
-				// update has occurred, so we reset state instead
-				this.actions.resetState();
-			});
-	}
+  private async isomorphicInitialize(): Promise<void> {
+    if (this.eagerConnection) return this.eagerConnection
 
-	/**
-	 * Initiates a connection.
-	 *
-	 * @param desiredChainIdOrChainParameters - If defined, indicates the desired chain to connect to. If the user is
-	 * already connected to this chain, no additional steps will be taken. Otherwise, the user will be prompted to switch
-	 * to the chain, if one of two conditions is met: either they already have it added in their extension, or the
-	 * argument is of type AddEthereumChainParameter, in which case the user will be prompted to add the chain with the
-	 * specified parameters first, before being prompted to switch.
-	 */
-	public async activate(
-		desiredChainIdOrChainParameters?: number | AddEthereumChainParameter
-	): Promise<void> {
-		let cancelActivation: () => void;
-		//@ts-ignore
-		if (!this.provider?.isConnected?.())
-			cancelActivation = this.actions.startActivation();
+    await (this.eagerConnection = import('@toruslabs/torus-embed').then(async (m) => {
+      this.torus = new m.default(this.constructorOptions)
+      
+      await this.torus.init(this.initOptions)
 
-		return this.isomorphicInitialize()
-			.then(async () => {
-				if (!this.provider) {
-					const TorusProvider = (await import("@toruslabs/torus-embed"))
-						.default;
-					const torusMain = new TorusProvider();
-					await torusMain.init();
-					await torusMain.ethereum.enable();
-					this.provider = torusMain.provider;
-				}
+      const [Web3Provider, Eip1193Bridge] = await Promise.all([
+        import('@ethersproject/providers').then(({ Web3Provider }) => Web3Provider),
+        import('@ethersproject/experimental').then(({ Eip1193Bridge }) => Eip1193Bridge),
+      ])
 
-				return Promise.all([
-					this.provider.request({ method: "eth_chainId" }) as Promise<string>,
-					this.provider.request({ method: "eth_requestAccounts" }) as Promise<
-						string[]
-					>,
-				]).then(([chainId, accounts]) => {
-					console.log(chainId);
-					const receivedChainId = parseChainId(chainId);
-					const desiredChainId =
-						typeof desiredChainIdOrChainParameters === "number"
-							? desiredChainIdOrChainParameters
-							: desiredChainIdOrChainParameters?.chainId;
+      await this.torus.login(this.loginOptions)
+      const provider = new Web3Provider(this.torus.provider as unknown as ExternalProvider)
 
-					// if there's no desired chain, or it's equal to the received, update
-					if (!desiredChainId || receivedChainId === desiredChainId)
-						return this.actions.update({ chainId: receivedChainId, accounts });
+      this.provider = new Eip1193Bridge(provider.getSigner(), provider)
 
-					const desiredChainIdHex = `0x${desiredChainId.toString(16)}`;
 
-					// if we're here, we can try to switch networks
-					// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-					return this.provider!.request({
-						method: "wallet_switchEthereumChain",
-						params: [{ chainId: desiredChainIdHex }],
-					})
-						.catch((error: ProviderRpcError) => {
-							if (
-								error.code === 4902 &&
-								typeof desiredChainIdOrChainParameters !== "number"
-							) {
-								// if we're here, we can try to add a new network
-								// eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-								return this.provider!.request({
-									method: "wallet_addEthereumChain",
-									params: [
-										{
-											...desiredChainIdOrChainParameters,
-											chainId: desiredChainIdHex,
-										},
-									],
-								});
-							}
+    if (this.provider) {
+      await Promise.all([
+        this.provider.request({ method: 'eth_chainId' }) as Promise<string>,
+        this.provider.request({ method: 'eth_accounts' }) as Promise<string[]>,
+      ])
+        .then(([chainId, accounts]) => {
+          this.actions.update({ chainId: Number.parseInt(chainId, 16), accounts })
+        })
+        .catch((error: Error) => {
+          this.actions.reportError(error)
+        })
+    }
+    })
+    )
+  }
 
-							throw error;
-						})
-						.then(() => this.activate(desiredChainId));
-				});
-			})
-			.catch((error) => {
-				cancelActivation?.();
-				throw error;
-			});
-	}
+   /** {@inheritdoc Connector.connectEagerly} */
+   public async connectEagerly(): Promise<void> {
+    await this.isomorphicInitialize()
+   }
+
+  public async deactivate(error?:Error): Promise<void> {
+    console.log('before disconnect')
+    await this.torus?.logout();
+    await this.torus?.cleanUp();
+    console.log('after disconnect')
+    this.torus = undefined;
+    this.eagerConnection = undefined;
+    this.actions.reportError(error);
+  }
+
 }
