@@ -1,10 +1,10 @@
 {
-	"name": "@web3-react/torus",
+	"name": "web3-react-torus",
 	"keywords": [
 		"web3-react",
 		"torusConnector"
 	],
-	"author": "Subham_Char",
+	"author": "char",
 	"license": "MIT",
 	"repository": "",
 	"publishConfig": {
