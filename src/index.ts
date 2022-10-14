@@ -28,8 +28,6 @@ export class TorusConnector extends Connector {
 	public provider?: torusProvider;
 	private eagerConnection?: Promise<void>;
 
-	public torus: any;
-
 	constructor({ actions, onError }: torusConstructorArgs) {
 		super(actions, onError);
 	}
@@ -39,34 +37,30 @@ export class TorusConnector extends Connector {
 
 		return (this.eagerConnection = import("@toruslabs/torus-embed").then(
 			async (m) => {
-				const provider = (await m?.default) ?? m;
+				const provider = (await m) && m?.default;
 				if (provider) {
-					const Torus = await import("@toruslabs/torus-embed").then(
-						(m) => m?.default ?? m
-					);
-					this.torus = new Torus();
-					await this.torus.init();
-					// await torusMain.init()
-					await this.torus.ethereum.enable();
-					this.provider = this.torus.provider;
+					const torusMain = new Torus();
+					await torusMain.init();
+					await torusMain.ethereum.enable();
+					this.provider = torusMain.provider;
 
-					this.provider?.on(
+					this.provider.on(
 						"connect",
 						({ chainId }: ProviderConnectInfo): void => {
 							this.actions.update({ chainId: parseChainId(chainId) });
 						}
 					);
 
-					this.provider?.on("disconnect", (error: ProviderRpcError): void => {
+					this.provider.on("disconnect", (error: ProviderRpcError): void => {
 						this.actions.resetState();
 						this.onError?.(error);
 					});
 
-					this.provider?.on("chainChanged", (chainId: string): void => {
+					this.provider.on("chainChanged", (chainId: string): void => {
 						this.actions.update({ chainId: parseChainId(chainId) });
 					});
 
-					this.provider?.on("accountsChanged", (accounts: string[]): void => {
+					this.provider.on("accountsChanged", (accounts: string[]): void => {
 						if (accounts.length === 0) {
 							this.actions.resetState();
 						} else {
@@ -126,24 +120,17 @@ export class TorusConnector extends Connector {
 		return this.isomorphicInitialize()
 			.then(async () => {
 				if (!this.provider) {
-					// const TorusProvider = (await import('@toruslabs/torus-embed')).default
-					// const torusMain = new TorusProvider()
-					// await torusMain.init()
-					// await torusMain.ethereum.enable()
-					// this.provider = torusMain.provider
-					const Torus = await import("@toruslabs/torus-embed").then(
-						(m) => m?.default ?? m
-					);
-					this.torus = new Torus();
-					await this.torus.init();
-					// await torusMain.init()
-					// await torusMain.ethereum.enable()
-					this.provider = this.torus.provider;
+					const TorusProvider = (await import("@toruslabs/torus-embed"))
+						.default;
+					const torusMain = new TorusProvider();
+					await torusMain.init();
+					await torusMain.ethereum.enable();
+					this.provider = torusMain.provider;
 				}
 
 				return Promise.all([
-					this.provider?.request({ method: "eth_chainId" }) as Promise<string>,
-					this.provider?.request({ method: "eth_requestAccounts" }) as Promise<
+					this.provider.request({ method: "eth_chainId" }) as Promise<string>,
+					this.provider.request({ method: "eth_requestAccounts" }) as Promise<
 						string[]
 					>,
 				]).then(([chainId, accounts]) => {
