@@ -37,7 +37,7 @@ export class TorusConnector extends Connector {
 
 		return (this.eagerConnection = import("@toruslabs/torus-embed").then(
 			async (m) => {
-				const provider = (await m) && m?.default;
+				const provider = (await m?.default) && m.LOGIN_PROVIDER;
 				if (provider) {
 					const torusMain = new Torus();
 					await torusMain.init();
