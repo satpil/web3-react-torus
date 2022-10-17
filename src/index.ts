@@ -44,7 +44,7 @@ export class TorusConnector extends Connector {
 					);
 					this.torus = new Torus();
 					await this.torus.init();
-					await this.torus.ethereum.enable();
+					await this.torus.login();
 					this.provider = this.torus.provider;
 
 					this.provider?.on(
@@ -128,7 +128,7 @@ export class TorusConnector extends Connector {
 					);
 					this.torus = new Torus();
 					await this.torus.init();
-					await this.torus.ethereum.enable();
+					await this.torus.login();
 					this.provider = this.torus.provider;
 				}
 
