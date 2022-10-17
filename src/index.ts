@@ -39,41 +39,37 @@ export class TorusConnector extends Connector {
 			async (m) => {
 				const provider = (await m) && m?.default;
 				if (provider) {
-					try {
-						const Torus = await import("@toruslabs/torus-embed").then(
-							(m) => m?.default ?? m
-						);
-						this.torus = new Torus();
-						await this.torus.init();
-						await this.torus.login();
-						this.provider = this.torus.provider;
+					const Torus = await import("@toruslabs/torus-embed").then(
+						(m) => m?.default ?? m
+					);
+					this.torus = new Torus();
+					await this.torus.init();
+					await this.torus.ethereum.enable();
+					this.provider = this.torus.provider;
 
-						this.provider?.on(
-							"connect",
-							({ chainId }: ProviderConnectInfo): void => {
-								this.actions.update({ chainId: parseChainId(chainId) });
-							}
-						);
-
-						this.provider?.on("disconnect", (error: ProviderRpcError): void => {
-							this.actions.resetState();
-							this.onError?.(error);
-						});
-
-						this.provider?.on("chainChanged", (chainId: string): void => {
+					this.provider?.on(
+						"connect",
+						({ chainId }: ProviderConnectInfo): void => {
 							this.actions.update({ chainId: parseChainId(chainId) });
-						});
+						}
+					);
 
-						this.provider?.on("accountsChanged", (accounts: string[]): void => {
-							if (accounts.length === 0) {
-								this.actions.resetState();
-							} else {
-								this.actions.update({ accounts });
-							}
-						});
-					} catch (error) {
-						console.log("error : ", error);
-					}
+					this.provider?.on("disconnect", (error: ProviderRpcError): void => {
+						this.actions.resetState();
+						this.onError?.(error);
+					});
+
+					this.provider?.on("chainChanged", (chainId: string): void => {
+						this.actions.update({ chainId: parseChainId(chainId) });
+					});
+
+					this.provider?.on("accountsChanged", (accounts: string[]): void => {
+						if (accounts.length === 0) {
+							this.actions.resetState();
+						} else {
+							this.actions.update({ accounts });
+						}
+					});
 				}
 			}
 		));
@@ -126,18 +122,14 @@ export class TorusConnector extends Connector {
 
 		return this.isomorphicInitialize()
 			.then(async () => {
-				try {
-					if (!this.provider) {
-						const Torus = await import("@toruslabs/torus-embed").then(
-							(m) => m?.default ?? m
-						);
-						this.torus = new Torus();
-						await this.torus.init();
-						await this.torus.login();
-						this.provider = this.torus.provider;
-					}
-				} catch (error) {
-					console.log("error : ", error);
+				if (!this.provider) {
+					const Torus = await import("@toruslabs/torus-embed").then(
+						(m) => m?.default ?? m
+					);
+					this.torus = new Torus();
+					await this.torus.init();
+					await this.torus.ethereum.enable();
+					this.provider = this.torus.provider;
 				}
 
 				return Promise.all([
@@ -194,8 +186,8 @@ export class TorusConnector extends Connector {
 			});
 	}
 
-	// public async deactivate() {
-	//   await this.torus.cleanUp()
-	//   this.provider = undefined
-	// }
+	public async deactivate() {
+		await this.torus.cleanUp();
+		this.provider = undefined;
+	}
 }
