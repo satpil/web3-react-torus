@@ -20,16 +20,32 @@ function parseChainId(chainId: string) {
 export interface torusConstructorArgs {
 	actions: Actions;
 	onError?: (error: Error) => void;
+	initOptions?: any;
+	constructorOptions?: any;
+	loginOptions?: any;
 }
 
 export class TorusConnector extends Connector {
 	/** {@inheritdoc Connector.provider} */
 	public provider?: torusProvider;
 	private eagerConnection?: Promise<void>;
+	private readonly initOptions: any;
+	private readonly constructorOptions: any;
+	private readonly loginOptions: any;
 	public torus: any;
 
-	constructor({ actions, onError }: torusConstructorArgs) {
+	constructor({
+		actions,
+		onError,
+		initOptions = {},
+		constructorOptions = {},
+		loginOptions = {},
+	}: torusConstructorArgs) {
 		super(actions, onError);
+
+		this.initOptions = initOptions;
+		this.constructorOptions = constructorOptions;
+		this.loginOptions = loginOptions;
 	}
 
 	private async isomorphicInitialize(): Promise<void> {
@@ -42,9 +58,9 @@ export class TorusConnector extends Connector {
 					const Torus = await import("@toruslabs/torus-embed").then(
 						(m) => m?.default ?? m
 					);
-					this.torus = new Torus();
-					await this.torus.init();
-					await this.torus.ethereum.enable();
+					this.torus = new Torus(this.constructorOptions);
+					await this.torus.init(this.initOptions);
+					await this.torus.ethereum.enable(this.loginOptions);
 					this.provider = this.torus.provider;
 
 					this.provider?.on(
@@ -126,9 +142,9 @@ export class TorusConnector extends Connector {
 					const Torus = await import("@toruslabs/torus-embed").then(
 						(m) => m?.default ?? m
 					);
-					this.torus = new Torus();
-					await this.torus.init();
-					await this.torus.ethereum.enable();
+					this.torus = new Torus(this.constructorOptions);
+					await this.torus.init(this.initOptions);
+					await this.torus.ethereum.enable(this.loginOptions);
 					this.provider = this.torus.provider;
 				}
 
