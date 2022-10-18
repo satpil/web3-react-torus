@@ -24,7 +24,7 @@
 		"start": "tsc --watch"
 	},
 	"dependencies": {
-		"@toruslabs/torus-embed": "1.18.3",
+		"@toruslabs/torus-embed": "1.35.8",
 		"@web3-react/types": "^8.0.20-beta.0"
 	},
 	"devDependencies": {
