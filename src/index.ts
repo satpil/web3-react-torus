@@ -7,8 +7,6 @@ import type {
 } from "@web3-react/types";
 import { Connector } from "@web3-react/types";
 
-type torusProvider = Provider;
-
 function parseChainId(chainId: string) {
 	return Number.parseInt(chainId, 16);
 }
@@ -27,7 +25,7 @@ export interface torusConstructorArgs {
 
 export class TorusConnector extends Connector {
 	/** {@inheritdoc Connector.provider} */
-	public provider?: torusProvider;
+	public provider?: any;
 	private eagerConnection?: Promise<void>;
 	private readonly initOptions: any;
 	private readonly constructorOptions: any;
@@ -53,14 +51,14 @@ export class TorusConnector extends Connector {
 
 		return (this.eagerConnection = import("@toruslabs/torus-embed").then(
 			async (m) => {
-				const provider = (await m) && m?.default;
+				const provider = (await m?.default) ?? m;
 				if (provider) {
 					const Torus = await import("@toruslabs/torus-embed").then(
 						(m) => m?.default ?? m
 					);
 					this.torus = new Torus(this.constructorOptions);
 					await this.torus.init(this.initOptions);
-					await this.torus.ethereum.enable(this.loginOptions);
+					await this.torus.login(this.loginOptions);
 					this.provider = this.torus.provider;
 
 					this.provider?.on(
@@ -144,7 +142,7 @@ export class TorusConnector extends Connector {
 					);
 					this.torus = new Torus(this.constructorOptions);
 					await this.torus.init(this.initOptions);
-					await this.torus.ethereum.enable(this.loginOptions);
+					await this.torus.login(this.loginOptions);
 					this.provider = this.torus.provider;
 				}
 
@@ -202,8 +200,10 @@ export class TorusConnector extends Connector {
 			});
 	}
 
-	public async deactivate() {
-		await this.torus.cleanUp();
-		this.provider = undefined;
+	public async deactivate(error?: Error): Promise<void> {
+		await this.torus?.logout();
+		await this.torus?.cleanUp();
+		this.torus = undefined;
+		this.eagerConnection = undefined;
 	}
 }
